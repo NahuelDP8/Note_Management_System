@@ -3,16 +3,22 @@ import { useAuth } from "../auth/AuthContext";
 import { useNavigate } from "react-router-dom";
 import NoteItem from "../components/NoteItem";
 import ConfirmModal from "../components/ConfirmModal";
+import CategoryMultiSelect from "../components/CategoryMultiSelect";
 import { useNotes } from "../hooks/useNotes";
+import { useCategories } from "../hooks/useCategories";
 
 export default function NotesPage() {
   const { logout } = useAuth();
   const navigate = useNavigate();
+  const { categories } = useCategories();
 
   const [showArchived, setShowArchived] = useState(false);
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [noteToDelete, setNoteToDelete] = useState<number | null>(null);
+
+  const [selectedCategoriesFilter, setSelectedCategoriesFilter] = useState<number[]>([]);
+  const [selectedCategories, setSelectedCategories] = useState<number[]>([]);
 
   const {
     notes,
@@ -22,14 +28,16 @@ export default function NotesPage() {
     toggleArchive,
     deleteNote,
     updateNote
-  } = useNotes(showArchived);
+  } = useNotes(showArchived, selectedCategoriesFilter);
 
   const handleCreate = async () => {
     if (!title.trim()) return;
 
-    await createNote(title, content);
+    await createNote(title, content, selectedCategories);
+
     setTitle("");
     setContent("");
+    setSelectedCategories([]);
   };
 
   const confirmDelete = async () => {
@@ -64,9 +72,16 @@ export default function NotesPage() {
             onChange={(e) => setContent(e.target.value)}
           />
 
+          <CategoryMultiSelect
+            categories={categories}
+            selected={selectedCategories}
+            onChange={setSelectedCategories}
+            placeholder="Select categories..."
+          />
+
           <button
             onClick={handleCreate}
-            className="btn-primary mt-2"
+            className="btn-primary mt-3"
             disabled={loading}
           >
             Create
@@ -74,6 +89,7 @@ export default function NotesPage() {
         </div>
 
         <div className="card">
+
           <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6 gap-4">
             <h1 className="text-2xl font-bold">
               {showArchived ? "Archived Notes" : "Active Notes"}
@@ -96,20 +112,28 @@ export default function NotesPage() {
             </div>
           </div>
 
-          {loading && <p className="text-slate-500">Loading...</p>}
-          {error && <p className="text-red-500">{error}</p>}
+          <CategoryMultiSelect
+            categories={categories}
+            selected={selectedCategoriesFilter}
+            onChange={setSelectedCategoriesFilter}
+            placeholder="Filter by categories..."
+          />
+
+          {loading && <p className="text-slate-500 mt-4">Loading...</p>}
+          {error && <p className="text-red-500 mt-4">{error}</p>}
 
           {!loading && notes.length === 0 && (
-            <p className="text-slate-400 text-sm">
+            <p className="text-slate-400 text-sm mt-4">
               No notes found.
             </p>
           )}
 
-          <div className="notes-grid">
+          <div className="notes-grid mt-6">
             {notes.map((note) => (
               <NoteItem
                 key={note.id}
                 note={note}
+                categories={categories}
                 showArchived={showArchived}
                 onToggleArchive={toggleArchive}
                 onDelete={(id) => setNoteToDelete(id)}
@@ -125,6 +149,7 @@ export default function NotesPage() {
           onConfirm={confirmDelete}
           onCancel={() => setNoteToDelete(null)}
         />
+
       </div>
     </div>
   );
