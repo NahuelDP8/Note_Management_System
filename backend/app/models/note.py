@@ -1,6 +1,8 @@
 from sqlalchemy import Column, Integer, String, Boolean, ForeignKey
 from sqlalchemy.orm import relationship
 from app.db.base import Base
+from app.models.note_category import note_categories
+
 
 class Note(Base):
     __tablename__ = "notes"
@@ -10,4 +12,16 @@ class Note(Base):
     content = Column(String, nullable=True)
     is_archived = Column(Boolean, default=False)
 
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(
+        Integer,
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False
+    )
+
+    user = relationship("User", back_populates="notes")
+
+    categories = relationship(
+        "Category",
+        secondary=note_categories,
+        back_populates="notes"
+    )
