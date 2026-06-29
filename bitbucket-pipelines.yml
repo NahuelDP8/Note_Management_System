@@ -1,24 +1,38 @@
 definitions:
   caches:
+    # Cache path: ~/.cache/pip
+    # Cache key: managed by Bitbucket for this cache name and branch context.
+    # Invalidation: clear Bitbucket caches or change dependency inputs for a practical cold run.
     pip: ~/.cache/pip
+    # Cache path: frontend/.pnpm-store
+    # Cache key: managed by Bitbucket for this cache name and branch context.
+    # Invalidation: clear Bitbucket caches or change dependency inputs for a practical cold run.
+    pnpm: frontend/.pnpm-store
   services:
     postgres:
       image: postgres:16
       variables:
         POSTGRES_DB: notes_test
         POSTGRES_USER: postgres
-        POSTGRES_PASSWORD: postgres
+        POSTGRES_HOST_AUTH_METHOD: trust
 
   steps:
     - step: &frontend_validate
         name: Frontend Validate
         image: node:22
         caches:
-          - node
+          - pnpm
         script:
-          - bash ci/benchmark/run_with_timer.sh ci/benchmark-results/bitbucket_frontend.csv frontend_npm_ci "cd frontend && npm ci"
-          - bash ci/benchmark/run_with_timer.sh ci/benchmark-results/bitbucket_frontend.csv frontend_lint "cd frontend && npm run lint"
-          - bash ci/benchmark/run_with_timer.sh ci/benchmark-results/bitbucket_frontend.csv frontend_build "cd frontend && npm run build"
+          - mkdir -p ci/benchmark-results
+          - echo "metric,duration_seconds" > ci/benchmark-results/bitbucket_frontend.csv
+          - echo "cache_restore_time,0" >> ci/benchmark-results/bitbucket_frontend.csv
+          - corepack enable
+          - cd frontend
+          - pnpm config set store-dir .pnpm-store
+          - bash ../ci/benchmark/run_with_timer.sh ../ci/benchmark-results/bitbucket_frontend.csv frontend_pnpm_install "pnpm install --frozen-lockfile"
+          - bash ../ci/benchmark/run_with_timer.sh ../ci/benchmark-results/bitbucket_frontend.csv frontend_lint "pnpm run lint"
+          - bash ../ci/benchmark/run_with_timer.sh ../ci/benchmark-results/bitbucket_frontend.csv frontend_build "pnpm run build"
+          - echo "cache_save_time,0" >> ../ci/benchmark-results/bitbucket_frontend.csv
         artifacts:
           - ci/benchmark-results/bitbucket_frontend.csv
 
@@ -30,12 +44,16 @@ definitions:
         caches:
           - pip
         script:
-          - export DATABASE_URL="postgresql+psycopg://postgres:postgres@127.0.0.1:5432/notes_test"
+          - mkdir -p ci/benchmark-results
+          - echo "metric,duration_seconds" > ci/benchmark-results/bitbucket_backend.csv
+          - echo "cache_restore_time,0" >> ci/benchmark-results/bitbucket_backend.csv
+          - export DATABASE_URL="postgresql+psycopg://postgres@127.0.0.1:5432/notes_test"
           - export SECRET_KEY="ci-secret-key"
           - export ACCESS_TOKEN_EXPIRE_MINUTES="30"
+          - cd backend
           - python -m pip install --upgrade pip
-          - bash ci/benchmark/run_with_timer.sh ci/benchmark-results/bitbucket_backend.csv backend_pip_install "cd backend && pip install -r requirements.txt"
-          - bash ci/benchmark/run_with_timer.sh ci/benchmark-results/bitbucket_backend.csv backend_pytest_install "cd backend && pip install pytest"
+          - bash ../ci/benchmark/run_with_timer.sh ../ci/benchmark-results/bitbucket_backend.csv backend_pip_install "pip install -r requirements.txt"
+          - bash ../ci/benchmark/run_with_timer.sh ../ci/benchmark-results/bitbucket_backend.csv backend_pytest_install "pip install pytest==8.3.4"
           - |
             python - << 'PY'
             import os
@@ -53,7 +71,8 @@ definitions:
             else:
                 raise RuntimeError("PostgreSQL did not become ready in time")
             PY
-          - bash ci/benchmark/run_with_timer.sh ci/benchmark-results/bitbucket_backend.csv backend_pytest "cd backend && pytest app/tests -q"
+          - bash ../ci/benchmark/run_with_timer.sh ../ci/benchmark-results/bitbucket_backend.csv backend_pytest "pytest app/tests -q"
+          - echo "cache_save_time,0" >> ../ci/benchmark-results/bitbucket_backend.csv
         artifacts:
           - ci/benchmark-results/bitbucket_backend.csv
 

@@ -12,23 +12,32 @@ default:
 variables:
   POSTGRES_DB: "notes_test"
   POSTGRES_USER: "postgres"
-  POSTGRES_PASSWORD: "postgres"
-  DATABASE_URL: "postgresql+psycopg://postgres:postgres@postgres:5432/notes_test"
+  POSTGRES_HOST_AUTH_METHOD: "trust"
+  DATABASE_URL: "postgresql+psycopg://postgres@postgres:5432/notes_test"
   SECRET_KEY: "ci-secret-key"
   ACCESS_TOKEN_EXPIRE_MINUTES: "30"
 
 frontend_validate:
   stage: validate
   image: node:22-bullseye
+  # Cache path: frontend/.pnpm-store/
+  # Cache key: frontend-${CI_COMMIT_REF_SLUG}
+  # Invalidation: changing branches creates a different cache key; clear runner cache for a forced cold run.
   cache:
     key: "frontend-${CI_COMMIT_REF_SLUG}"
     paths:
-      - frontend/node_modules/
-      - frontend/.npm/
+      - frontend/.pnpm-store/
   script:
-    - bash ci/benchmark/run_with_timer.sh ci/benchmark-results/gitlab_frontend.csv frontend_npm_ci "cd frontend && npm ci --cache .npm --prefer-offline"
-    - bash ci/benchmark/run_with_timer.sh ci/benchmark-results/gitlab_frontend.csv frontend_lint "cd frontend && npm run lint"
-    - bash ci/benchmark/run_with_timer.sh ci/benchmark-results/gitlab_frontend.csv frontend_build "cd frontend && npm run build"
+    - mkdir -p ci/benchmark-results
+    - echo "metric,duration_seconds" > ci/benchmark-results/gitlab_frontend.csv
+    - echo "cache_restore_time,0" >> ci/benchmark-results/gitlab_frontend.csv
+    - corepack enable
+    - cd frontend
+    - pnpm config set store-dir .pnpm-store
+    - bash ../ci/benchmark/run_with_timer.sh ../ci/benchmark-results/gitlab_frontend.csv frontend_pnpm_install "pnpm install --frozen-lockfile"
+    - bash ../ci/benchmark/run_with_timer.sh ../ci/benchmark-results/gitlab_frontend.csv frontend_lint "pnpm run lint"
+    - bash ../ci/benchmark/run_with_timer.sh ../ci/benchmark-results/gitlab_frontend.csv frontend_build "pnpm run build"
+    - echo "cache_save_time,0" >> ../ci/benchmark-results/gitlab_frontend.csv
   artifacts:
     when: always
     paths:
@@ -43,14 +52,21 @@ backend_tests:
       alias: postgres
   variables:
     PIP_CACHE_DIR: "$CI_PROJECT_DIR/.cache/pip"
+  # Cache path: .cache/pip/
+  # Cache key: backend-${CI_COMMIT_REF_SLUG}
+  # Invalidation: changing branches creates a different cache key; clear runner cache for a forced cold run.
   cache:
     key: "backend-${CI_COMMIT_REF_SLUG}"
     paths:
       - .cache/pip/
   script:
+    - mkdir -p ci/benchmark-results
+    - echo "metric,duration_seconds" > ci/benchmark-results/gitlab_backend.csv
+    - echo "cache_restore_time,0" >> ci/benchmark-results/gitlab_backend.csv
     - python -m pip install --upgrade pip
-    - bash ci/benchmark/run_with_timer.sh ci/benchmark-results/gitlab_backend.csv backend_pip_install "cd backend && pip install -r requirements.txt"
-    - bash ci/benchmark/run_with_timer.sh ci/benchmark-results/gitlab_backend.csv backend_pytest_install "cd backend && pip install pytest"
+    - cd backend
+    - bash ../ci/benchmark/run_with_timer.sh ../ci/benchmark-results/gitlab_backend.csv backend_pip_install "pip install -r requirements.txt"
+    - bash ../ci/benchmark/run_with_timer.sh ../ci/benchmark-results/gitlab_backend.csv backend_pytest_install "pip install pytest==8.3.4"
     - |
       python - << 'PY'
       import os
@@ -68,7 +84,8 @@ backend_tests:
       else:
           raise RuntimeError("PostgreSQL did not become ready in time")
       PY
-    - bash ci/benchmark/run_with_timer.sh ci/benchmark-results/gitlab_backend.csv backend_pytest "cd backend && pytest app/tests -q"
+    - bash ../ci/benchmark/run_with_timer.sh ../ci/benchmark-results/gitlab_backend.csv backend_pytest "pytest app/tests -q"
+    - echo "cache_save_time,0" >> ../ci/benchmark-results/gitlab_backend.csv
   artifacts:
     when: always
     paths:

@@ -11,9 +11,9 @@ This project now includes equivalent CI definitions for:
 Each provider runs the same two checks:
 
 1. Frontend validation
-   - Install dependencies (`npm ci`)
-   - Lint (`npm run lint`)
-   - Build (`npm run build`)
+   - Install dependencies (`pnpm install --frozen-lockfile`)
+   - Lint (`pnpm run lint`)
+   - Build (`pnpm run build`)
 2. Backend validation
    - Install dependencies (`pip install -r requirements.txt` + `pytest`)
    - Run tests (`pytest app/tests -q`)
@@ -21,9 +21,9 @@ Each provider runs the same two checks:
 ## Runtime Baseline
 
 - Node.js: `22`
-- Python: `3.11`
-- Backend test env:
-  - `DATABASE_URL=postgresql+psycopg://postgres:postgres@<host>:5432/notes_test`
+  - Python: `3.11`
+  - Backend test env:
+  - `DATABASE_URL=postgresql+psycopg://postgres@<host>:5432/notes_test`
   - `SECRET_KEY=ci-secret-key`
   - `ACCESS_TOKEN_EXPIRE_MINUTES=30`
 
@@ -45,7 +45,10 @@ Each provider runs the same two checks:
 
 2. Cache behavior is provider-specific
    - Cache performance and invalidation logic differ by platform.
-   - Adjustment applied: provider-native caching is configured for npm and pip where available.
+   - Adjustment applied: provider-native caching is configured for pnpm and pip where available.
+   - GitHub Actions uses explicit `actions/cache/restore` and `actions/cache/save`, so cache restore/save timing is measured directly in CSV artifacts.
+   - GitLab CI/CD restores and saves cache outside the user script, so exact transfer timing remains in provider logs.
+   - Bitbucket Pipelines restores and saves named caches outside the user script, so exact transfer timing remains in provider logs.
 
 3. Secret management differs by platform
    - Secret injection UX and scoping vary.

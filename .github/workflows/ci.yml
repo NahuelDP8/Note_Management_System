@@ -1,4 +1,4 @@
-name: CI GithubActions
+name: CI
 
 on:
   push:
@@ -24,22 +24,66 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
+
+      - name: Enable Corepack
+        run: corepack enable
+
+      - name: Get pnpm store path
+        id: pnpm-store
+        run: echo "path=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+
+      # Cache path: pnpm global store.
+      # Cache key: OS + frontend/pnpm-lock.yaml hash.
+      # Invalidation: any lockfile change creates a new cache key.
+      - name: Start pnpm cache restore timer
+        run: echo "CACHE_RESTORE_START=$(date +%s)" >> "$GITHUB_ENV"
+
+      - name: Restore pnpm store cache
+        id: pnpm-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('frontend/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
+
+      - name: Record pnpm cache restore time
+        run: |
+          mkdir -p ../ci/benchmark-results
+          if [ ! -f ../ci/benchmark-results/github_frontend.csv ]; then echo "metric,duration_seconds" > ../ci/benchmark-results/github_frontend.csv; fi
+          echo "cache_restore_time,$(($(date +%s) - CACHE_RESTORE_START))" >> ../ci/benchmark-results/github_frontend.csv
 
       - name: Install dependencies
         run: |
-          bash ../ci/benchmark/run_with_timer.sh ../ci/benchmark-results/github_frontend.csv frontend_npm_ci "npm ci"
+          bash ../ci/benchmark/run_with_timer.sh ../ci/benchmark-results/github_frontend.csv frontend_pnpm_install "pnpm install --frozen-lockfile"
 
       - name: Lint
         run: |
-          bash ../ci/benchmark/run_with_timer.sh ../ci/benchmark-results/github_frontend.csv frontend_lint "npm run lint"
+          bash ../ci/benchmark/run_with_timer.sh ../ci/benchmark-results/github_frontend.csv frontend_lint "pnpm run lint"
 
       - name: Build
         run: |
-          bash ../ci/benchmark/run_with_timer.sh ../ci/benchmark-results/github_frontend.csv frontend_build "npm run build"
+          bash ../ci/benchmark/run_with_timer.sh ../ci/benchmark-results/github_frontend.csv frontend_build "pnpm run build"
 
-      - name: Upload frontend benchmark artifact
+      - name: Start pnpm cache save timer
+        run: echo "CACHE_SAVE_START=$(date +%s)" >> "$GITHUB_ENV"
+
+      - name: Save pnpm store cache
+        if: steps.pnpm-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ steps.pnpm-store.outputs.path }}
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('frontend/pnpm-lock.yaml') }}
+
+      - name: Record pnpm cache save time
+        run: |
+          if [ "${{ steps.pnpm-cache.outputs.cache-hit }}" = "true" ]; then
+            echo "cache_save_time,0" >> ../ci/benchmark-results/github_frontend.csv
+          else
+            echo "cache_save_time,$(($(date +%s) - CACHE_SAVE_START))" >> ../ci/benchmark-results/github_frontend.csv
+          fi
+
+      - name: Upload frontend benchmark
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -54,8 +98,8 @@ jobs:
         image: postgres:16
         env:
           POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
           POSTGRES_DB: notes_test
+          POSTGRES_HOST_AUTH_METHOD: trust
         ports:
           - 5432:5432
         options: >-
@@ -67,7 +111,7 @@ jobs:
       run:
         working-directory: backend
     env:
-      DATABASE_URL: postgresql+psycopg://postgres:postgres@localhost:5432/notes_test
+      DATABASE_URL: postgresql+psycopg://postgres@localhost:5432/notes_test
       SECRET_KEY: ci-secret-key
       ACCESS_TOKEN_EXPIRE_MINUTES: "30"
 
@@ -79,14 +123,55 @@ jobs:
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: pip
-          cache-dependency-path: backend/requirements.txt
+
+      - name: Get pip cache path
+        id: pip-cache-path
+        run: echo "path=$(python -m pip cache dir)" >> "$GITHUB_OUTPUT"
+
+      # Cache path: pip download/build cache.
+      # Cache key: OS + backend/requirements.txt hash.
+      # Invalidation: any requirements.txt change creates a new cache key.
+      - name: Start pip cache restore timer
+        run: echo "CACHE_RESTORE_START=$(date +%s)" >> "$GITHUB_ENV"
+
+      - name: Restore pip cache
+        id: pip-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ steps.pip-cache-path.outputs.path }}
+          key: ${{ runner.os }}-pip-${{ hashFiles('backend/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-pip-
+
+      - name: Record pip cache restore time
+        run: |
+          mkdir -p ../ci/benchmark-results
+          if [ ! -f ../ci/benchmark-results/github_backend.csv ]; then echo "metric,duration_seconds" > ../ci/benchmark-results/github_backend.csv; fi
+          echo "cache_restore_time,$(($(date +%s) - CACHE_RESTORE_START))" >> ../ci/benchmark-results/github_backend.csv
 
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           bash ../ci/benchmark/run_with_timer.sh ../ci/benchmark-results/github_backend.csv backend_pip_install "pip install -r requirements.txt"
-          bash ../ci/benchmark/run_with_timer.sh ../ci/benchmark-results/github_backend.csv backend_pytest_install "pip install pytest"
+          bash ../ci/benchmark/run_with_timer.sh ../ci/benchmark-results/github_backend.csv backend_pytest_install "pip install pytest==8.3.4"
+
+      - name: Start pip cache save timer
+        run: echo "CACHE_SAVE_START=$(date +%s)" >> "$GITHUB_ENV"
+
+      - name: Save pip cache
+        if: steps.pip-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ steps.pip-cache-path.outputs.path }}
+          key: ${{ runner.os }}-pip-${{ hashFiles('backend/requirements.txt') }}
+
+      - name: Record pip cache save time
+        run: |
+          if [ "${{ steps.pip-cache.outputs.cache-hit }}" = "true" ]; then
+            echo "cache_save_time,0" >> ../ci/benchmark-results/github_backend.csv
+          else
+            echo "cache_save_time,$(($(date +%s) - CACHE_SAVE_START))" >> ../ci/benchmark-results/github_backend.csv
+          fi
 
       - name: Wait for PostgreSQL
         run: |
@@ -111,7 +196,7 @@ jobs:
         run: |
           bash ../ci/benchmark/run_with_timer.sh ../ci/benchmark-results/github_backend.csv backend_pytest "pytest app/tests -q"
 
-      - name: Upload backend benchmark artifact
+      - name: Upload backend benchmark
         if: always()
         uses: actions/upload-artifact@v4
         with:

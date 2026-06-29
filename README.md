@@ -56,6 +56,7 @@ Required variables:
 DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/notes_db
 SECRET_KEY=change-this-secret
 ACCESS_TOKEN_EXPIRE_MINUTES=30
+CORS_ORIGINS=http://localhost:5173
 ```
 
 Optional for tests:
@@ -87,8 +88,9 @@ Frontend (new terminal):
 
 ```bash
 cd frontend
-npm ci
-npm run dev
+corepack enable
+pnpm install
+pnpm run dev
 ```
 
 ### Option B: pip + venv
@@ -111,8 +113,9 @@ Frontend:
 
 ```bash
 cd frontend
-npm ci
-npm run dev
+corepack enable
+pnpm install
+pnpm run dev
 ```
 
 ## Database and Seed Data
@@ -158,7 +161,44 @@ Docs:
 
 - Login page: `/`
 - Protected notes page: `/notes`
-- API client base URL is currently hardcoded in `frontend/src/api/axios.ts`
+- API client base URL comes from `VITE_API_BASE_URL`.
+
+## Production Deployment
+
+### Render
+
+Use `render.yaml` from the repository root to create the backend web service and PostgreSQL database.
+
+Required Render environment variables:
+
+```env
+DATABASE_URL=<provided by Render PostgreSQL>
+SECRET_KEY=<strong-production-secret>
+ACCESS_TOKEN_EXPIRE_MINUTES=30
+CORS_ORIGINS=http://localhost:5173,https://<vercel-production-domain>,https://*.vercel.app
+```
+
+`DATABASE_URL` is wired from the Render database in `render.yaml`. Render may provide a `postgres://` or `postgresql://` URL; the backend normalizes it for the `psycopg` driver.
+
+`CORS_ORIGINS` is comma-separated. Keep local development explicit with `http://localhost:5173`, add the production Vercel URL, and include `https://*.vercel.app` to allow Vercel preview deployments. Production and preview origins should use HTTPS to avoid mixed content issues.
+
+### Vercel
+
+Deploy the `frontend` directory as the Vercel project.
+
+Required Vercel environment variable:
+
+```env
+VITE_API_BASE_URL=https://<render-backend-url>/api/v1
+```
+
+Set this variable in the Vercel dashboard for Production, Preview, and Development environments. The frontend does not fall back to localhost in production builds, so missing or non-HTTPS production values fail fast instead of shipping a broken deploy.
+
+Vercel uses `frontend/vercel.json` to build with pnpm and route React Router pages such as `/notes` back to `index.html`. Requests under `/api/*` and static files are not rewritten.
+
+### Frontend to Backend Flow
+
+The browser calls the Render API directly using `VITE_API_BASE_URL`. FastAPI only accepts browser requests from origins listed in `CORS_ORIGINS`, including the production Vercel domain and Vercel preview URLs.
 
 ## Testing
 
@@ -184,7 +224,7 @@ Provider configs:
 
 All three pipelines currently validate:
 
-- Frontend: `npm ci`, lint, build
+- Frontend: `pnpm install --frozen-lockfile`, lint, build
 - Backend: dependency install + `pytest`
 - PostgreSQL service for backend tests
 - Benchmark timing output as CSV artifacts
@@ -200,8 +240,8 @@ Frontend:
 
 ```bash
 cd frontend
-npm run lint
-npm run build
+pnpm run lint
+pnpm run build
 ```
 
 Backend:
@@ -214,5 +254,5 @@ pytest app/tests -q
 
 ## Notes
 
-- CORS currently allows `http://localhost:5173`.
-- Production hardening should include strict CORS, secret management, and migration-only schema changes.
+- CORS is configured through `CORS_ORIGINS`.
+- Production hardening should include strict secret management and migration-only schema changes.
