@@ -10,13 +10,25 @@ DEMO_EMAIL = "user@example.com"
 DEMO_PASSWORD = "string"
 
 DEFAULT_CATEGORIES = [
-    "work",
-    "personal",
-    "study",
-    "ideas",
-    "sport",
-    "recipes",
+    "Trabajo",
+    "Personal",
+    "Ideas",
+    "Estudio",
 ]
+
+
+def seed_default_categories(db: Session) -> None:
+    for name in DEFAULT_CATEGORIES:
+        exists = (
+            db.query(Category)
+            .filter(Category.user_id.is_(None))
+            .filter(Category.name.ilike(name))
+            .first()
+        )
+        if not exists:
+            db.add(Category(name=name, user_id=None))
+
+    db.commit()
 
 
 def seed():
@@ -42,12 +54,7 @@ def seed():
         # -----------------------
         # Categories
         # -----------------------
-        for name in DEFAULT_CATEGORIES:
-            exists = db.query(Category).filter(Category.name == name).first()
-            if not exists:
-                db.add(Category(name=name))
-
-        db.commit()
+        seed_default_categories(db)
         print("🏷️ Categories seeded")
 
     finally:

@@ -40,6 +40,17 @@ class FakeCategoryRepository:
     def get_by_id(self, db, category_id):
         return self.categories.get(category_id)
 
+    def get_visible_by_id(self, db, category_id, user_id):
+        category = self.categories.get(category_id)
+        if not category:
+            return None
+
+        category_user_id = getattr(category, "user_id", None)
+        if category_user_id is None or category_user_id == user_id:
+            return category
+
+        return None
+
 
 def build_service(note=None, categories=None):
     service = NotesService()
@@ -49,7 +60,7 @@ def build_service(note=None, categories=None):
 
 
 def test_create_note_attaches_existing_categories():
-    category = SimpleNamespace(id=1, name="work")
+    category = SimpleNamespace(id=1, name="work", user_id=None)
     service = build_service(categories={1: category})
 
     note = service.create_note(
@@ -75,6 +86,20 @@ def test_create_note_rejects_missing_category():
             db=None,
             user_id=10,
             data=NoteCreate(title="Missing category", category_ids=[99]),
+        )
+
+    assert exc.value.status_code == 404
+
+
+def test_create_note_rejects_category_from_another_user():
+    category = SimpleNamespace(id=1, name="private", user_id=99)
+    service = build_service(categories={1: category})
+
+    with pytest.raises(HTTPException) as exc:
+        service.create_note(
+            db=None,
+            user_id=10,
+            data=NoteCreate(title="Wrong category", category_ids=[1]),
         )
 
     assert exc.value.status_code == 404

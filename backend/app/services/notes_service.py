@@ -36,16 +36,21 @@ class NotesService:
         self,
         db: Session,
         category_ids: list[int],
+        user_id: int,
     ) -> list[Category]:
 
         categories = []
 
-        for category_id in category_ids:
-            category = self.category_repo.get_by_id(db, category_id)
+        for category_id in set(category_ids):
+            category = self.category_repo.get_visible_by_id(
+                db,
+                category_id,
+                user_id,
+            )
             if not category:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Category {category_id} not found",
+                    detail=f"Category {category_id} not found or not available",
                 )
             categories.append(category)
 
@@ -86,7 +91,8 @@ class NotesService:
         if data.category_ids:
             categories = self.__get_categories_or_404(
                 db,
-                data.category_ids
+                data.category_ids,
+                user_id,
             )
 
         return self.repo.create(
@@ -108,7 +114,11 @@ class NotesService:
 
         categories = None
         if data.category_ids is not None:
-            categories = self.__get_categories_or_404(db, data.category_ids)
+            categories = self.__get_categories_or_404(
+                db,
+                data.category_ids,
+                user_id,
+            )
 
         return self.repo.update(
             db,
@@ -163,12 +173,16 @@ class NotesService:
         category_id: int,
         archived: bool = False,
     ):
-        category = self.category_repo.get_by_id(db, category_id)
+        category = self.category_repo.get_visible_by_id(
+            db,
+            category_id,
+            user_id,
+        )
 
         if not category:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Category not found",
+                detail="Category not found or not available",
             )
 
         return self.repo.get_by_category(

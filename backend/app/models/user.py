@@ -15,3 +15,8 @@ class User(Base):
         back_populates="user",
         cascade="all, delete-orphan"
     )
+    categories = relationship(
+        "Category",
+        back_populates="user",
+        cascade="all, delete-orphan"
+    )
