@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int
     CORS_ORIGINS: str = "http://localhost:5173"
+    PASSWORD_MIN_LENGTH: int = 8
 
     @field_validator("DATABASE_URL")
     @classmethod

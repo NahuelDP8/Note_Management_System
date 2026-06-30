@@ -19,6 +19,45 @@ def test_register_rejects_existing_email(monkeypatch):
     assert exc.value.status_code == 400
 
 
+def test_register_rejects_short_password(monkeypatch):
+    monkeypatch.setattr(auth, "get_by_email", lambda db, email: None)
+
+    with pytest.raises(HTTPException) as exc:
+        auth.register_user(db=None, email="user@example.com", password="short")
+
+    assert exc.value.status_code == 400
+    assert "Password must be at least" in exc.value.detail
+
+
+def test_register_hashes_password(monkeypatch):
+    created_user = SimpleNamespace(id=1, email="user@example.com")
+    captured = {}
+
+    monkeypatch.setattr(auth, "get_by_email", lambda db, email: None)
+    monkeypatch.setattr(auth, "hash_password", lambda password: f"hashed-{password}")
+    monkeypatch.setattr(auth, "create_access_token", lambda payload: "token")
+
+    def fake_create(db, email, hashed_password):
+        captured["email"] = email
+        captured["hashed_password"] = hashed_password
+        return created_user
+
+    monkeypatch.setattr(auth, "create", fake_create)
+
+    user, token = auth.register_user(
+        db=None,
+        email="user@example.com",
+        password="strong-password",
+    )
+
+    assert user == created_user
+    assert token == "token"
+    assert captured == {
+        "email": "user@example.com",
+        "hashed_password": "hashed-strong-password",
+    }
+
+
 def test_login_rejects_wrong_password(monkeypatch):
     monkeypatch.setattr(
         auth,

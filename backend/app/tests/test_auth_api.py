@@ -18,6 +18,27 @@ def test_register_and_login(client):
     assert body["access_token"]
 
 
+def test_register_rejects_duplicate_email(client):
+    payload = {"email": "user@example.com", "password": "strong-password"}
+
+    first_response = client.post("/api/v1/auth/register", json=payload)
+    second_response = client.post("/api/v1/auth/register", json=payload)
+
+    assert first_response.status_code == 200
+    assert second_response.status_code == 400
+    assert second_response.json()["detail"] == "Email already registered"
+
+
+def test_register_rejects_short_password(client):
+    response = client.post(
+        "/api/v1/auth/register",
+        json={"email": "user@example.com", "password": "short"},
+    )
+
+    assert response.status_code == 400
+    assert "Password must be at least" in response.json()["detail"]
+
+
 def test_login_rejects_invalid_credentials(client):
     response = client.post(
         "/api/v1/auth/login",

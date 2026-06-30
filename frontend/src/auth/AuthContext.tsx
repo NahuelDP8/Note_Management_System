@@ -1,13 +1,6 @@
-import { createContext, useContext, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import api from "../api/axios";
-
-interface AuthContextType {
-  token: string | null;
-  login: (email: string, password: string) => Promise<void>;
-  logout: () => void;
-}
-
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+import { AuthContext } from "./auth-context";
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(
@@ -29,20 +22,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(accessToken);
   };
 
+  const register = async (email: string, password: string) => {
+    await api.post("/auth/register", {
+      email: email.trim(),
+      password,
+    });
+  };
+
   const logout = () => {
     localStorage.removeItem("token");
     setToken(null);
   };
 
   return (
-    <AuthContext.Provider value={{ token, login, logout }}>
+    <AuthContext.Provider value={{ token, register, login, logout }}>
       {children}
     </AuthContext.Provider>
   );
 }
 
-export function useAuth() {
-  const context = useContext(AuthContext);
-  if (!context) throw new Error("useAuth must be used inside AuthProvider");
-  return context;
-}

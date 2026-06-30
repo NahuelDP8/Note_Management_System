@@ -57,6 +57,7 @@ DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/notes_db
 SECRET_KEY=change-this-secret
 ACCESS_TOKEN_EXPIRE_MINUTES=30
 CORS_ORIGINS=http://localhost:5173
+PASSWORD_MIN_LENGTH=8
 ```
 
 Optional for tests:
@@ -176,6 +177,7 @@ DATABASE_URL=<provided by Render PostgreSQL>
 SECRET_KEY=<strong-production-secret>
 ACCESS_TOKEN_EXPIRE_MINUTES=30
 CORS_ORIGINS=http://localhost:5173,https://<vercel-production-domain>,https://*.vercel.app
+PASSWORD_MIN_LENGTH=8
 ```
 
 `DATABASE_URL` is wired from the Render database in `render.yaml`. Render may provide a `postgres://` or `postgresql://` URL; the backend normalizes it for the `psycopg` driver.

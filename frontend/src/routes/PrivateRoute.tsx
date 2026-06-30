@@ -1,7 +1,8 @@
 import { Navigate } from "react-router-dom";
-import { useAuth } from "../auth/AuthContext";
+import type { ReactNode } from "react";
+import { useAuth } from "../auth/useAuth";
 
-export default function PrivateRoute({ children }: any) {
+export default function PrivateRoute({ children }: { children: ReactNode }) {
   const { token } = useAuth();
 
   if (!token) {
